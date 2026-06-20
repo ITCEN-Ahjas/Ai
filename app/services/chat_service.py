@@ -49,5 +49,22 @@ AI 답변: {reply}
         messages=[{"role": "user", "content": prompt}],
     )
 
-    content = response.choices[0].message.content
-    return json.loads(content)["questions"]
+    content = response.choices[0].message.content.strip()
+
+    # JSON 블록 안에 감싸진 경우 추출
+    if "```" in content:
+        content = content.split("```")[1]
+        if content.startswith("json"):
+            content = content[4:]
+        content = content.strip()
+
+    # JSON 객체 부분만 추출
+    start = content.find("{")
+    end = content.rfind("}") + 1
+    if start != -1 and end > start:
+        content = content[start:end]
+
+    try:
+        return json.loads(content)["questions"]
+    except Exception:
+        return []
