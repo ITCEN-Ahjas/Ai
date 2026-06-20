@@ -13,6 +13,7 @@ def chat(message: str, history: list[ChatMessage]) -> str:
 - 답변은 3~5문장 이내로 짧고 간결하게 작성합니다.
 - 여행지 추천 시 장소명과 한 줄 특징만 간단히 제공합니다.
 - 충청북도 외 지역 질문은 충청북도 여행으로 안내를 유도합니다.
+- 마크다운 문법(*, **, #, - 등)을 절대 사용하지 마세요. 일반 텍스트로만 답변하세요.
 """
 
     messages = [
@@ -48,5 +49,22 @@ AI 답변: {reply}
         messages=[{"role": "user", "content": prompt}],
     )
 
-    content = response.choices[0].message.content
-    return json.loads(content)["questions"]
+    content = response.choices[0].message.content.strip()
+
+    # JSON 블록 안에 감싸진 경우 추출
+    if "```" in content:
+        content = content.split("```")[1]
+        if content.startswith("json"):
+            content = content[4:]
+        content = content.strip()
+
+    # JSON 객체 부분만 추출
+    start = content.find("{")
+    end = content.rfind("}") + 1
+    if start != -1 and end > start:
+        content = content[start:end]
+
+    try:
+        return json.loads(content)["questions"]
+    except Exception:
+        return []
