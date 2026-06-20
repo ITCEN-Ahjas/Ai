@@ -4,7 +4,7 @@ pydantic
 pydantic-settings
 python-dotenv
 httpx
-openai
+groq
 
 # RAG (시간 될 때 주석 해제)
 # chromadb
