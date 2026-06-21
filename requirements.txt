@@ -5,6 +5,6 @@ pydantic-settings
 python-dotenv
 httpx
 groq
+pytest
 
-# RAG (시간 될 때 주석 해제)
-# chromadb
+# Gemini 연동은 2번 커밋에서 추가
