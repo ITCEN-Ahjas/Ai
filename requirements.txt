@@ -5,6 +5,5 @@ pydantic-settings
 python-dotenv
 httpx
 groq
-
-# RAG (시간 될 때 주석 해제)
-# chromadb
+google-genai
+pytest
