@@ -5,6 +5,5 @@ pydantic-settings
 python-dotenv
 httpx
 groq
+google-genai
 pytest
-
-# Gemini 연동은 2번 커밋에서 추가

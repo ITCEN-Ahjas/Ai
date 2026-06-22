@@ -1,4 +1,15 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field, field_validator
+
+TravelStyle = Literal[
+    "기본 추천",
+    "많이 걷는 여행",
+    "야외 활동",
+    "실내 중심",
+    "야간 일정",
+    "비 오는 날 대비",
+]
 
 
 class CurrentWeatherRequest(BaseModel):
@@ -30,21 +41,16 @@ class FeelsLikeWeatherRequest(BaseModel):
 
 class OutfitRecommendationRequest(BaseModel):
     region: str = Field(min_length=1, max_length=20, description="선택한 충북 지역")
+    travelStyle: TravelStyle = Field(description="여행 스타일")
     currentWeather: CurrentWeatherRequest
     feelsLikeWeather: FeelsLikeWeatherRequest
-    travelStyle: str = Field(
-        min_length=1,
-        max_length=30,
-        description="여행 스타일",
-        examples=["관광", "축제", "레포츠", "자연 탐방"],
-    )
 
-    @field_validator("region", "travelStyle")
+    @field_validator("region")
     @classmethod
-    def validate_not_blank(cls, value: str) -> str:
+    def validate_region(cls, value: str) -> str:
         normalized_value = value.strip()
 
         if not normalized_value:
-            raise ValueError("빈 문자열은 입력할 수 없습니다.")
+            raise ValueError("지역명은 비워둘 수 없습니다.")
 
         return normalized_value

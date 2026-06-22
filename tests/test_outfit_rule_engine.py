@@ -7,8 +7,16 @@ from app.services.outfit_rule_engine import OutfitRuleEngine
 
 rule_engine = OutfitRuleEngine()
 
-TRAVEL_STYLES = ["관광", "축제", "레포츠", "자연 탐방"]
-FEELS_LIKE_TEMPERATURES = [30, 24, 18, 12, 2]
+TRAVEL_STYLES = [
+    "기본 추천",
+    "많이 걷는 여행",
+    "야외 활동",
+    "실내 중심",
+    "야간 일정",
+    "비 오는 날 대비",
+]
+
+FEELS_LIKE_TEMPERATURES = [30, 20, 10, 0]
 
 SCENARIOS = [
     (feels_like_temperature, travel_style)
@@ -19,7 +27,7 @@ SCENARIOS = [
 
 def create_request(
     feels_like_temperature: float,
-    travel_style: str = "관광",
+    travel_style: str = "기본 추천",
     precipitation_type: str = "없음",
     precipitation_probability: int = 0,
     wind_speed: float = 1.5,
@@ -52,74 +60,89 @@ def create_request(
     ("feels_like_temperature", "travel_style"),
     SCENARIOS,
 )
-def test_recommendation_is_created_for_twenty_weather_and_style_scenarios(
+def test_recommendation_is_created_for_weather_and_style_scenarios(
     feels_like_temperature: float,
     travel_style: str,
 ) -> None:
-    request = create_request(
-        feels_like_temperature=feels_like_temperature,
-        travel_style=travel_style,
+    response = rule_engine.recommend(
+        create_request(
+            feels_like_temperature=feels_like_temperature,
+            travel_style=travel_style,
+        )
     )
-
-    response = rule_engine.recommend(request)
 
     assert response.region == "청주"
     assert response.travelStyle == travel_style
-    assert response.source == "rule"
-    assert len(response.outerwear) > 0
-    assert len(response.tops) > 0
-    assert len(response.bottoms) > 0
-    assert len(response.shoes) > 0
-    assert len(response.preparationItems) > 0
-    assert len(response.reasons) > 0
+    assert response.source == "fallback"
+    assert response.outfitCards.outerwear.name
+    assert response.outfitCards.top.name
+    assert response.outfitCards.bottom.name
+    assert response.outfitCards.shoes.name
+    assert 1 <= len(response.preparationItems) <= 4
 
 
-def test_rain_weather_includes_waterproof_preparation_items() -> None:
-    request = create_request(
-        feels_like_temperature=16,
-        precipitation_type="비",
-        precipitation_probability=80,
+def test_rain_weather_includes_waterproof_cards_and_umbrella() -> None:
+    response = rule_engine.recommend(
+        create_request(
+            feels_like_temperature=12,
+            precipitation_type="비",
+            precipitation_probability=80,
+        )
     )
 
-    response = rule_engine.recommend(request)
+    assert "방수" in response.outfitCards.outerwear.name
+    assert "미끄럼" in response.outfitCards.shoes.name
+    assert any(item.code == "umbrella" for item in response.preparationItems)
 
-    assert any("우산" in item for item in response.preparationItems)
-    assert any("방수" in item for item in response.outerwear)
 
-
-def test_snow_weather_includes_anti_slip_shoes() -> None:
-    request = create_request(
-        feels_like_temperature=1,
-        precipitation_type="눈",
-        precipitation_probability=70,
+def test_snow_weather_includes_winter_shoes_and_warm_items() -> None:
+    response = rule_engine.recommend(
+        create_request(
+            feels_like_temperature=1,
+            precipitation_type="눈",
+            precipitation_probability=70,
+        )
     )
 
-    response = rule_engine.recommend(request)
+    assert "방한" in response.outfitCards.outerwear.name
+    assert "미끄럼" in response.outfitCards.shoes.name
+    assert any(item.code == "warm_accessory" for item in response.preparationItems)
 
-    assert any("미끄럼" in item for item in response.shoes)
-    assert any("장갑" in item for item in response.preparationItems)
 
-
-def test_strong_wind_adds_windproof_outerwear() -> None:
-    request = create_request(
-        feels_like_temperature=14,
-        wind_speed=9,
-        wind_status="강한 바람",
+def test_strong_wind_recommends_windbreaker() -> None:
+    response = rule_engine.recommend(
+        create_request(
+            feels_like_temperature=14,
+            wind_speed=9,
+            wind_status="강한 바람",
+        )
     )
 
-    response = rule_engine.recommend(request)
-
-    assert any("바람" in item for item in response.outerwear)
-    assert any("바람" in reason for reason in response.reasons)
+    assert "바람막이" in response.outfitCards.outerwear.name
 
 
-def test_leports_style_adds_activity_friendly_items() -> None:
-    request = create_request(
-        feels_like_temperature=20,
-        travel_style="레포츠",
+def test_walking_travel_recommends_comfortable_shoes() -> None:
+    response = rule_engine.recommend(
+        create_request(
+            feels_like_temperature=18,
+            travel_style="많이 걷는 여행",
+        )
     )
 
-    response = rule_engine.recommend(request)
+    assert "운동화" in response.outfitCards.shoes.name
+    assert any(
+        item.code == "comfortable_shoes"
+        for item in response.preparationItems
+    )
 
-    assert any("기능성" in item for item in response.tops)
-    assert any("안정적" in item for item in response.shoes)
+
+def test_rainy_day_style_includes_umbrella_without_rain_data() -> None:
+    response = rule_engine.recommend(
+        create_request(
+            feels_like_temperature=18,
+            travel_style="비 오는 날 대비",
+        )
+    )
+
+    assert "방수" in response.outfitCards.outerwear.name
+    assert any(item.code == "umbrella" for item in response.preparationItems)
