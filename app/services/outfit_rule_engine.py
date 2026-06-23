@@ -156,7 +156,11 @@ class OutfitRuleEngine:
             return self._replace_selection(
                 selection,
                 shoes_code=self._get_walking_shoes(request),
-                preparation_codes=["water_bottle", "battery"],
+                preparation_codes=[
+                    "comfortable_shoes",
+                    "water_bottle",
+                    "battery",
+                ],
             )
 
         if travel_style == "야외 활동":
