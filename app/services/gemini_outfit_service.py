@@ -2,8 +2,8 @@ from pydantic import ValidationError
 
 from app.config import settings
 from app.schemas.outfit_request import OutfitRecommendationRequest
-from app.schemas.outfit_response import (GeminiOutfitCopy,
-                                         OutfitRecommendationResponse)
+from app.schemas.outfit_response import OutfitSelection
+from app.services.outfit_catalog import OutfitCatalog
 
 
 class GeminiOutfitGenerationError(Exception):
@@ -11,11 +11,14 @@ class GeminiOutfitGenerationError(Exception):
 
 
 class GeminiOutfitService:
+    def __init__(self, catalog: OutfitCatalog | None = None) -> None:
+        self.catalog = catalog or OutfitCatalog()
+
     def generate(
         self,
         request: OutfitRecommendationRequest,
-        fallback: OutfitRecommendationResponse,
-    ) -> GeminiOutfitCopy:
+        fallback_selection: OutfitSelection,
+    ) -> OutfitSelection:
         if not settings.gemini_api_key.strip():
             raise GeminiOutfitGenerationError(
                 "GEMINI_API_KEY가 설정되지 않았습니다."
@@ -30,15 +33,13 @@ class GeminiOutfitService:
             ) from exception
 
         try:
-            client = genai.Client(
-                api_key=settings.gemini_api_key,
-            )
+            client = genai.Client(api_key=settings.gemini_api_key)
 
             response = client.models.generate_content(
                 model=settings.gemini_model,
                 contents=self._build_prompt(
                     request=request,
-                    fallback=fallback,
+                    fallback_selection=fallback_selection,
                 ),
                 config=self._create_generation_config(types),
             )
@@ -48,9 +49,7 @@ class GeminiOutfitService:
                     "Gemini 응답 본문이 비어 있습니다."
                 )
 
-            return GeminiOutfitCopy.model_validate_json(
-                response.text
-            )
+            return OutfitSelection.model_validate_json(response.text)
 
         except GeminiOutfitGenerationError:
             raise
@@ -62,7 +61,7 @@ class GeminiOutfitService:
 
         except Exception as exception:
             raise GeminiOutfitGenerationError(
-                "Gemini 추천 문구 생성 중 오류가 발생했습니다."
+                "Gemini 추천 코드 생성 중 오류가 발생했습니다."
             ) from exception
 
     def _create_generation_config(self, types):
@@ -73,7 +72,7 @@ class GeminiOutfitService:
                 response_format={
                     "text": {
                         "mime_type": "application/json",
-                        "schema": GeminiOutfitCopy.model_json_schema(),
+                        "schema": OutfitSelection.model_json_schema(),
                     }
                 }
             )
@@ -84,7 +83,7 @@ class GeminiOutfitService:
         ):
             return types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_json_schema=GeminiOutfitCopy.model_json_schema(),
+                response_json_schema=OutfitSelection.model_json_schema(),
             )
 
         if (
@@ -93,7 +92,7 @@ class GeminiOutfitService:
         ):
             return types.GenerateContentConfig(
                 response_mime_type="application/json",
-                response_schema=GeminiOutfitCopy,
+                response_schema=OutfitSelection,
             )
 
         raise GeminiOutfitGenerationError(
@@ -103,37 +102,25 @@ class GeminiOutfitService:
     def _build_prompt(
         self,
         request: OutfitRecommendationRequest,
-        fallback: OutfitRecommendationResponse,
+        fallback_selection: OutfitSelection,
     ) -> str:
         current_weather = request.currentWeather
         feels_like_weather = request.feelsLikeWeather
-        outfit_cards = fallback.outfitCards
-
-        preparation_text = "\n".join(
-            [
-                (
-                    f"- code: {item.code}, "
-                    f"이름: {item.name}, "
-                    f"기본 설명: {item.description}"
-                )
-                for item in fallback.preparationItems
-            ]
-        )
 
         return f"""
-당신은 충청북도를 여행하는 외국인 방문자를 위한 옷차림 안내 문구 작성 도우미입니다.
+당신은 충청북도를 여행하는 외국인 방문자를 위한 옷차림 코드 선택 도우미입니다.
 
-아래에 이미 확정된 옷차림 카드 이름과 준비물 이름이 있습니다.
-당신은 이름을 변경하거나 새 항목을 추천하면 안 됩니다.
-각 카드와 준비물에 표시할 짧고 자연스러운 한국어 설명만 작성하세요.
+당신은 문장을 만들거나 카드 설명을 작성하면 안 됩니다.
+반드시 제공된 카탈로그 안에서 코드만 선택해 JSON으로 반환하세요.
 
 반드시 지켜야 할 규칙:
-1. 의류 이름, 준비물 이름, 준비물 code를 변경하지 마세요.
-2. 브랜드명, 쇼핑 링크, 가격, 성별 표현을 사용하지 마세요.
-3. 설명은 카드당 1문장으로 작성하세요.
-4. 설명은 45자 이내의 쉬운 한국어로 작성하세요.
-5. 제공된 준비물 code만 사용하세요.
-6. 결과는 JSON 스키마에 맞춰 반환하세요.
+1. outerwearCode, topCode, bottomCode, shoesCode는 각 카테고리의 제공 코드만 사용하세요.
+2. preparationCodes는 제공 코드만 사용하고 1개 이상 4개 이하로 선택하세요.
+3. 브랜드명, 가격, 성별, 쇼핑 정보, 설명 문장을 절대 반환하지 마세요.
+4. 실제 비가 오는 날에는 rain_boots 또는 waterproof_hiking_shoes를 우선 고려하세요.
+5. 비가 올 가능성만 높을 때에는 waterproof_sneakers를 우선 고려하세요.
+6. 눈 또는 결빙 가능성이 있으면 anti_slip_winter_boots를 우선 고려하세요.
+7. 기본 규칙 선택이 안전한 경우 불필요하게 변경하지 마세요.
 
 [여행 정보]
 - 지역: {request.region}
@@ -145,16 +132,19 @@ class GeminiOutfitService:
 - 습도: {current_weather.humidity}%
 - 풍속: {current_weather.windSpeed}m/s
 - 바람 상태: {current_weather.windStatus}
+- 강수량 설명: {current_weather.precipitationAmount}
 - 강수 형태: {current_weather.precipitationType}
 - 강수 확률: {current_weather.precipitationProbability}%
 - 하늘 상태: {current_weather.skyStatus}
+- 종합 날씨: {current_weather.weatherCondition}
 
-[확정된 옷차림 카드]
-- 아우터: {outfit_cards.outerwear.name}
-- 상의: {outfit_cards.top.name}
-- 하의: {outfit_cards.bottom.name}
-- 신발: {outfit_cards.shoes.name}
+[기본 규칙 선택]
+- outerwearCode: {fallback_selection.outerwearCode}
+- topCode: {fallback_selection.topCode}
+- bottomCode: {fallback_selection.bottomCode}
+- shoesCode: {fallback_selection.shoesCode}
+- preparationCodes: {", ".join(fallback_selection.preparationCodes)}
 
-[확정된 준비물]
-{preparation_text}
+[선택 가능한 카탈로그]
+{self.catalog.get_prompt_catalog()}
 """.strip()
