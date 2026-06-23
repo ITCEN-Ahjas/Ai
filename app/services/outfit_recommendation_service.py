@@ -1,5 +1,9 @@
+from app.schemas.outfit_batch_request import OutfitBatchRecommendationRequest
+from app.schemas.outfit_batch_response import (
+    TRAVEL_STYLES, OutfitBatchRecommendationResponse)
 from app.schemas.outfit_request import OutfitRecommendationRequest
-from app.schemas.outfit_response import OutfitRecommendationResponse
+from app.schemas.outfit_response import (OutfitRecommendationResponse,
+                                         OutfitSelection)
 from app.services.gemini_outfit_service import (GeminiOutfitGenerationError,
                                                 GeminiOutfitService)
 from app.services.outfit_catalog import (InvalidOutfitSelectionError,
@@ -49,6 +53,75 @@ class OutfitRecommendationService:
                 selection=fallback_selection,
                 source="fallback",
             )
+
+    def recommend_batch(
+        self,
+        request: OutfitBatchRecommendationRequest,
+    ) -> OutfitBatchRecommendationResponse:
+        fallback_selections = self._create_fallback_selections(request)
+
+        try:
+            gemini_batch_selection = (
+                self.gemini_outfit_service.generate_batch(
+                    request=request,
+                    fallback_selections=fallback_selections,
+                )
+            )
+
+            return self._build_batch_response(
+                region=request.region,
+                selections=gemini_batch_selection.to_style_selections(),
+                source="ai",
+            )
+
+        except (
+            GeminiOutfitGenerationError,
+            InvalidOutfitSelectionError,
+        ):
+            return self._build_batch_response(
+                region=request.region,
+                selections=fallback_selections,
+                source="fallback",
+            )
+
+    def _create_fallback_selections(
+        self,
+        request: OutfitBatchRecommendationRequest,
+    ) -> dict[str, OutfitSelection]:
+        return {
+            travel_style: self.rule_engine.select(
+                OutfitRecommendationRequest(
+                    region=request.region,
+                    travelStyle=travel_style,
+                    currentWeather=request.currentWeather,
+                    feelsLikeWeather=request.feelsLikeWeather,
+                )
+            )
+            for travel_style in TRAVEL_STYLES
+        }
+
+    def _build_batch_response(
+        self,
+        *,
+        region: str,
+        selections: dict[str, OutfitSelection],
+        source: str,
+    ) -> OutfitBatchRecommendationResponse:
+        recommendations = {
+            travel_style: self.catalog.build_response(
+                region=region,
+                travel_style=travel_style,
+                selection=selections[travel_style],
+                source=source,
+            )
+            for travel_style in TRAVEL_STYLES
+        }
+
+        return OutfitBatchRecommendationResponse(
+            region=region,
+            source=source,
+            recommendations=recommendations,
+        )
 
 
 outfit_recommendation_service = OutfitRecommendationService()

@@ -225,9 +225,6 @@ class OutfitRuleEngine:
             return "anti_slip_winter_boots"
 
         if self._has_actual_rain(request):
-            if self._has_heavy_rain(request):
-                return "rain_boots"
-
             return "waterproof_hiking_shoes"
 
         if self._has_rain_risk(request):
@@ -299,17 +296,6 @@ class OutfitRuleEngine:
         request: OutfitRecommendationRequest,
     ) -> bool:
         return "눈" in self._get_weather_text(request)
-
-    def _has_heavy_rain(
-        self,
-        request: OutfitRecommendationRequest,
-    ) -> bool:
-        weather_text = self._get_weather_text(request)
-
-        return any(
-            keyword in weather_text
-            for keyword in ["폭우", "호우", "강한 비", "많은 비"]
-        )
 
     def _has_strong_wind(
         self,
