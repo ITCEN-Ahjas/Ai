@@ -260,6 +260,11 @@ class OutfitCatalog:
             name="물병",
             description="관광지 이동 중 수분을 보충할 수 있어요.",
         ),
+        "comfortable_shoes": CatalogEntry(
+            code="comfortable_shoes",
+            name="편한 신발",
+            description="많이 걷는 일정에 대비해 발이 편한 신발이 좋아요.",
+        ),
         "thermal_bottle": CatalogEntry(
             code="thermal_bottle",
             name="보온 물병",
@@ -300,12 +305,13 @@ class OutfitCatalog:
         "hot_pack": 5,
         "thermal_bottle": 6,
         "light_outerwear": 7,
-        "water_bottle": 8,
-        "battery": 9,
-        "sunscreen": 10,
-        "hat": 11,
-        "insect_repellent": 12,
-        "portable_fan": 13,
+        "comfortable_shoes": 8,
+        "water_bottle": 9,
+        "battery": 10,
+        "sunscreen": 11,
+        "hat": 12,
+        "insect_repellent": 13,
+        "portable_fan": 14,
     }
 
     def build_response(

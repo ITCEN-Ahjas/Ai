@@ -91,7 +91,7 @@ def test_rain_weather_includes_waterproof_cards_and_umbrella() -> None:
     )
 
     assert "방수" in response.outfitCards.outerwear.name
-    assert "미끄럼" in response.outfitCards.shoes.name
+    assert response.outfitCards.shoes.code == "rain_boots"
     assert any(item.code == "umbrella" for item in response.preparationItems)
 
 
