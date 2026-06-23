@@ -1,4 +1,4 @@
-from fastapi import APIRouter
+from fastapi import APIRouter, BackgroundTasks
 
 from app.schemas.outfit_batch_request import OutfitBatchRecommendationRequest
 from app.schemas.outfit_batch_response import OutfitBatchRecommendationResponse
@@ -28,5 +28,17 @@ def recommend_outfit(
 )
 def recommend_outfits(
     body: OutfitBatchRecommendationRequest,
+    background_tasks: BackgroundTasks,
 ) -> OutfitBatchRecommendationResponse:
-    return outfit_recommendation_service.recommend_batch(body)
+    response = outfit_recommendation_service.recommend_batch(body)
+
+    if (
+        response.source == "fallback"
+        and outfit_recommendation_service.reserve_batch_warmup(body)
+    ):
+        background_tasks.add_task(
+            outfit_recommendation_service.warm_batch_cache,
+            body,
+        )
+
+    return response

@@ -6,6 +6,7 @@ from app.schemas.outfit_request import (CurrentWeatherRequest,
                                         OutfitRecommendationRequest)
 from app.schemas.outfit_response import OutfitSelection
 from app.services.gemini_outfit_service import GeminiOutfitGenerationError
+from app.services.outfit_recommendation_cache import OutfitRecommendationCache
 from app.services.outfit_recommendation_service import \
     OutfitRecommendationService
 from app.services.outfit_rule_engine import OutfitRuleEngine
@@ -55,11 +56,16 @@ class FakeGeminiInvalidSelectionService:
 
 
 class FakeGeminiBatchSuccessService:
+    def __init__(self) -> None:
+        self.batch_call_count = 0
+
     def generate_batch(
         self,
         request: OutfitBatchRecommendationRequest,
         fallback_selections: dict[str, OutfitSelection],
     ) -> BatchOutfitSelection:
+        self.batch_call_count += 1
+
         return BatchOutfitSelection(
             basic=fallback_selections["기본 추천"],
             walking=OutfitSelection(
@@ -109,11 +115,16 @@ class FakeGeminiBatchSuccessService:
 
 
 class FakeGeminiBatchFailureService:
+    def __init__(self) -> None:
+        self.batch_call_count = 0
+
     def generate_batch(
         self,
         request: OutfitBatchRecommendationRequest,
         fallback_selections: dict[str, OutfitSelection],
     ) -> BatchOutfitSelection:
+        self.batch_call_count += 1
+
         raise GeminiOutfitGenerationError("Gemini 배치 호출 실패")
 
 
@@ -208,9 +219,22 @@ def create_batch_request(
     )
 
 
-def test_returns_catalog_copy_when_gemini_selection_succeeds() -> None:
-    service = OutfitRecommendationService(
+def create_service(
+    *,
+    gemini_outfit_service,
+) -> OutfitRecommendationService:
+    return OutfitRecommendationService(
         rule_engine=OutfitRuleEngine(),
+        gemini_outfit_service=gemini_outfit_service,
+        cache=OutfitRecommendationCache(
+            ttl_seconds=600,
+            failure_retry_seconds=300,
+        ),
+    )
+
+
+def test_returns_catalog_copy_when_gemini_selection_succeeds() -> None:
+    service = create_service(
         gemini_outfit_service=FakeGeminiSuccessService(),
     )
 
@@ -229,8 +253,7 @@ def test_returns_catalog_copy_when_gemini_selection_succeeds() -> None:
 
 
 def test_returns_catalog_fallback_when_gemini_generation_fails() -> None:
-    service = OutfitRecommendationService(
-        rule_engine=OutfitRuleEngine(),
+    service = create_service(
         gemini_outfit_service=FakeGeminiFailureService(),
     )
 
@@ -247,8 +270,7 @@ def test_returns_catalog_fallback_when_gemini_generation_fails() -> None:
 
 
 def test_returns_fallback_when_gemini_returns_unknown_catalog_code() -> None:
-    service = OutfitRecommendationService(
-        rule_engine=OutfitRuleEngine(),
+    service = create_service(
         gemini_outfit_service=FakeGeminiInvalidSelectionService(),
     )
 
@@ -259,8 +281,7 @@ def test_returns_fallback_when_gemini_returns_unknown_catalog_code() -> None:
 
 
 def test_recommends_rain_boots_when_it_is_actually_raining() -> None:
-    service = OutfitRecommendationService(
-        rule_engine=OutfitRuleEngine(),
+    service = create_service(
         gemini_outfit_service=FakeGeminiFailureService(),
     )
 
@@ -284,8 +305,7 @@ def test_recommends_rain_boots_when_it_is_actually_raining() -> None:
 
 
 def test_recommends_cushioned_sneakers_for_walking_without_rain() -> None:
-    service = OutfitRecommendationService(
-        rule_engine=OutfitRuleEngine(),
+    service = create_service(
         gemini_outfit_service=FakeGeminiFailureService(),
     )
 
@@ -298,8 +318,7 @@ def test_recommends_cushioned_sneakers_for_walking_without_rain() -> None:
 
 
 def test_limits_preparation_items_to_four_and_removes_duplicates() -> None:
-    service = OutfitRecommendationService(
-        rule_engine=OutfitRuleEngine(),
+    service = create_service(
         gemini_outfit_service=FakeGeminiFailureService(),
     )
 
@@ -317,60 +336,91 @@ def test_limits_preparation_items_to_four_and_removes_duplicates() -> None:
     assert len(preparation_codes) == len(set(preparation_codes))
 
 
-def test_returns_six_styles_when_batch_gemini_generation_succeeds() -> None:
-    service = OutfitRecommendationService(
-        rule_engine=OutfitRuleEngine(),
+def test_returns_fallback_immediately_then_uses_cached_ai_batch_result() -> None:
+    gemini_service = FakeGeminiBatchSuccessService()
+    service = create_service(gemini_outfit_service=gemini_service)
+    request = create_batch_request()
+
+    first_response = service.recommend_batch(request)
+
+    assert first_response.source == "fallback"
+    assert len(first_response.recommendations) == 6
+    assert gemini_service.batch_call_count == 0
+
+    assert service.reserve_batch_warmup(request) is True
+
+    service.warm_batch_cache(request)
+
+    second_response = service.recommend_batch(request)
+
+    assert second_response.source == "ai"
+    assert gemini_service.batch_call_count == 1
+    assert set(second_response.recommendations.keys()) == set(
+        TRAVEL_STYLES
+    )
+    assert (
+        second_response.recommendations["많이 걷는 여행"]
+        .outfitCards.shoes.code
+        == "cushioned_sneakers"
+    )
+    assert (
+        second_response.recommendations["비 오는 날 대비"]
+        .outfitCards.shoes.code
+        == "rain_boots"
+    )
+
+
+def test_prevents_duplicate_batch_warmup_for_same_request() -> None:
+    service = create_service(
         gemini_outfit_service=FakeGeminiBatchSuccessService(),
     )
+    request = create_batch_request()
 
-    response = service.recommend_batch(create_batch_request())
+    service.recommend_batch(request)
 
-    assert response.source == "ai"
-    assert set(response.recommendations.keys()) == set(TRAVEL_STYLES)
-    assert len(response.recommendations) == 6
-
-    walking = response.recommendations["많이 걷는 여행"]
-    rainy = response.recommendations["비 오는 날 대비"]
-
-    assert walking.outfitCards.shoes.code == "cushioned_sneakers"
-    assert rainy.outfitCards.outerwear.code == "waterproof_jacket"
-    assert rainy.outfitCards.shoes.code == "rain_boots"
+    assert service.reserve_batch_warmup(request) is True
+    assert service.reserve_batch_warmup(request) is False
 
 
-def test_returns_six_fallback_styles_when_batch_gemini_fails() -> None:
-    service = OutfitRecommendationService(
-        rule_engine=OutfitRuleEngine(),
-        gemini_outfit_service=FakeGeminiBatchFailureService(),
+def test_keeps_fallback_cache_when_batch_gemini_fails() -> None:
+    gemini_service = FakeGeminiBatchFailureService()
+    service = create_service(gemini_outfit_service=gemini_service)
+    request = create_batch_request(
+        precipitation_amount="강한 비",
+        precipitation_type="비",
+        precipitation_probability=90,
+        weather_condition="비",
+        sky_status="흐림",
     )
 
-    response = service.recommend_batch(
-        create_batch_request(
-            precipitation_amount="강한 비",
-            precipitation_type="비",
-            precipitation_probability=90,
-            weather_condition="비",
-            sky_status="흐림",
-        )
-    )
+    first_response = service.recommend_batch(request)
 
-    assert response.source == "fallback"
-    assert set(response.recommendations.keys()) == set(TRAVEL_STYLES)
-    assert len(response.recommendations) == 6
+    assert first_response.source == "fallback"
+    assert service.reserve_batch_warmup(request) is True
 
-    rainy = response.recommendations["비 오는 날 대비"]
-    walking = response.recommendations["많이 걷는 여행"]
+    service.warm_batch_cache(request)
 
-    assert rainy.outfitCards.shoes.code == "rain_boots"
+    second_response = service.recommend_batch(request)
+
+    assert second_response.source == "fallback"
+    assert gemini_service.batch_call_count == 1
+    assert service.reserve_batch_warmup(request) is False
+
+    walking = second_response.recommendations["많이 걷는 여행"]
+    rainy = second_response.recommendations["비 오는 날 대비"]
+
     assert walking.outfitCards.shoes.code == "waterproof_hiking_shoes"
+    assert rainy.outfitCards.shoes.code == "rain_boots"
 
 
 def test_returns_four_outfit_cards_for_each_batch_style() -> None:
-    service = OutfitRecommendationService(
-        rule_engine=OutfitRuleEngine(),
+    service = create_service(
         gemini_outfit_service=FakeGeminiBatchFailureService(),
     )
 
     response = service.recommend_batch(create_batch_request())
+
+    assert response.source == "fallback"
 
     for recommendation in response.recommendations.values():
         assert recommendation.outfitCards.outerwear.code
