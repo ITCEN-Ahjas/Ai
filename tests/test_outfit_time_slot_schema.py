@@ -42,10 +42,10 @@ def create_time_slot(
     }
 
 
-def test_time_slot_request_accepts_remaining_time_slots() -> None:
-    request = TimeSlotOutfitRecommendationRequest(
-        region="청주",
-        timeSlots=[
+def create_request_data() -> dict:
+    return {
+        "region": "청주",
+        "timeSlots": [
             create_time_slot(
                 time_slot="afternoon",
                 time_slot_name="오후",
@@ -61,9 +61,14 @@ def test_time_slot_request_accepts_remaining_time_slots() -> None:
                 end_time="21:00",
             ),
         ],
-    )
+    }
+
+
+def test_time_slot_request_accepts_remaining_time_slots() -> None:
+    request = TimeSlotOutfitRecommendationRequest(**create_request_data())
 
     assert request.region == "청주"
+    assert request.residenceWeather is None
     assert len(request.timeSlots) == 2
     assert request.timeSlots[0].timeSlot == "afternoon"
     assert request.timeSlots[1].forecastAt == datetime(
@@ -73,6 +78,22 @@ def test_time_slot_request_accepts_remaining_time_slots() -> None:
         19,
         0,
     )
+
+
+def test_time_slot_request_accepts_residence_weather() -> None:
+    request_data = create_request_data()
+    request_data["residenceWeather"] = {
+        "city": " New York ",
+        "country": " United States ",
+        "feelsLikeTemperature": -5.0,
+    }
+
+    request = TimeSlotOutfitRecommendationRequest(**request_data)
+
+    assert request.residenceWeather is not None
+    assert request.residenceWeather.city == "New York"
+    assert request.residenceWeather.country == "United States"
+    assert request.residenceWeather.feelsLikeTemperature == -5.0
 
 
 def test_time_slot_request_rejects_duplicate_time_slot() -> None:
