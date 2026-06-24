@@ -7,7 +7,8 @@ import time
 from dataclasses import dataclass
 from typing import Literal, Mapping
 
-from app.schemas.outfit_batch_request import OutfitBatchRecommendationRequest
+from pydantic import BaseModel
+
 from app.schemas.outfit_response import OutfitSelection
 
 
@@ -39,7 +40,7 @@ class OutfitRecommendationCache:
 
     def create_key(
         self,
-        request: OutfitBatchRecommendationRequest,
+        request: BaseModel,
     ) -> str:
         payload = json.dumps(
             request.model_dump(mode="json"),
@@ -155,6 +156,6 @@ class OutfitRecommendationCache:
         selections: Mapping[str, OutfitSelection],
     ) -> dict[str, OutfitSelection]:
         return {
-            travel_style: selection.model_copy(deep=True)
-            for travel_style, selection in selections.items()
+            time_slot: selection.model_copy(deep=True)
+            for time_slot, selection in selections.items()
         }
