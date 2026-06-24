@@ -4,8 +4,14 @@ from app.schemas.outfit_batch_request import OutfitBatchRecommendationRequest
 from app.schemas.outfit_batch_response import OutfitBatchRecommendationResponse
 from app.schemas.outfit_request import OutfitRecommendationRequest
 from app.schemas.outfit_response import OutfitRecommendationResponse
+from app.schemas.outfit_time_slot_request import \
+    TimeSlotOutfitRecommendationRequest
+from app.schemas.outfit_time_slot_response import \
+    TimeSlotOutfitBatchRecommendationResponse
 from app.services.outfit_recommendation_service import \
     outfit_recommendation_service
+from app.services.outfit_time_slot_recommendation_service import \
+    time_slot_outfit_recommendation_service
 
 router = APIRouter()
 
@@ -38,6 +44,29 @@ def recommend_outfits(
     ):
         background_tasks.add_task(
             outfit_recommendation_service.warm_batch_cache,
+            body,
+        )
+
+    return response
+
+
+@router.post(
+    "/time-slot-recommendations",
+    response_model=TimeSlotOutfitBatchRecommendationResponse,
+    summary="시간대별 옷차림 일괄 추천",
+)
+def recommend_time_slot_outfits(
+    body: TimeSlotOutfitRecommendationRequest,
+    background_tasks: BackgroundTasks,
+) -> TimeSlotOutfitBatchRecommendationResponse:
+    response = time_slot_outfit_recommendation_service.recommend(body)
+
+    if (
+        response.source == "fallback"
+        and time_slot_outfit_recommendation_service.reserve_warmup(body)
+    ):
+        background_tasks.add_task(
+            time_slot_outfit_recommendation_service.warm_cache,
             body,
         )
 
