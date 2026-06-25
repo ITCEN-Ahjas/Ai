@@ -329,17 +329,27 @@ class GeminiOutfitService:
         time_slot_sections = []
 
         for time_slot_weather in request.timeSlots:
+            residence_climate_text = self._build_residence_climate_text(
+                residence_weather=request.residenceWeather,
+                target_feels_like=(
+                    time_slot_weather.feelsLikeWeather.feelsLikeTemperature
+                ),
+            )
+
             time_slot_sections.append(
                 f"""
 [{time_slot_weather.timeSlot} / {time_slot_weather.timeSlotName}]
 - 시간: {time_slot_weather.startTime.strftime('%H:%M')}-{time_slot_weather.endTime.strftime('%H:%M')}
 - 예보 시각: {time_slot_weather.forecastAt.strftime('%Y-%m-%d %H:%M')}
 
-[날씨 정보]
+[충북 시간대 날씨]
 {self._build_weather_text(
     current_weather=time_slot_weather.currentWeather,
     feels_like_weather=time_slot_weather.feelsLikeWeather,
 )}
+
+[현재 거주 도시 기준]
+{residence_climate_text}
 
 [기본 규칙 선택]
 {self._build_selection_text(
@@ -369,17 +379,50 @@ class GeminiOutfitService:
 6. 실제 비가 오는 시간대에는 rain_boots 또는 waterproof_hiking_shoes를 우선 고려하세요.
 7. 비가 올 가능성만 높은 시간대에는 waterproof_sneakers를 우선 고려하세요.
 8. 눈 또는 결빙 가능성이 있으면 anti_slip_winter_boots를 우선 고려하세요.
-9. 기본 규칙 선택이 안전한 경우 불필요하게 변경하지 마세요.
-10. 아침과 저녁은 낮보다 선선할 수 있으므로 체감온도와 바람을 함께 고려하세요.
+9. 충북의 실제 체감온도, 강수, 바람 등 안전 관련 날씨 조건을 최우선으로 고려하세요.
+10. 현재 거주 도시와의 체감온도 차이는 사용자가 평소보다 더 덥거나 선선하게 느낄 수 있는 보조 기준으로만 반영하세요.
+11. 충북이 현재 거주 도시보다 8°C 이상 더 따뜻하면 한 단계 가벼운 옷차림과 수분 보충을 고려하세요.
+12. 충북이 현재 거주 도시보다 8°C 이상 더 선선하면 얇은 겉옷 등 한 단계 보온을 고려하세요.
+13. 아침과 저녁은 낮보다 선선할 수 있으므로 체감온도와 바람을 함께 고려하세요.
+14. 기본 규칙 선택이 안전한 경우 불필요하게 변경하지 마세요.
 
 [여행 정보]
 - 지역: {request.region}
 
-[시간대별 날씨와 기본 규칙 선택]
+[시간대별 날씨와 현재 거주 도시 기준]
 {time_slot_text}
 
 [선택 가능한 카탈로그]
 {self.catalog.get_prompt_catalog()}
+""".strip()
+
+    def _build_residence_climate_text(
+        self,
+        *,
+        residence_weather,
+        target_feels_like: float,
+    ) -> str:
+        if residence_weather is None:
+            return "- 현재 거주 도시 정보 없음: 충북 시간대 날씨만 기준으로 추천하세요."
+
+        temperature_difference = (
+            target_feels_like - residence_weather.feelsLikeTemperature
+        )
+
+        if temperature_difference >= 0:
+            difference_description = (
+                f"충북이 현재 거주 도시보다 약 {temperature_difference:.1f}°C 더 따뜻함"
+            )
+        else:
+            difference_description = (
+                f"충북이 현재 거주 도시보다 약 {abs(temperature_difference):.1f}°C 더 선선함"
+            )
+
+        return f"""
+- 도시: {residence_weather.city}, {residence_weather.country}
+- 현재 거주 도시 체감온도: {residence_weather.feelsLikeTemperature}°C
+- 충북 시간대 체감온도 차이: {difference_description}
+- 이 차이는 사용자의 평소 기후 적응도를 고려하는 보조 기준입니다.
 """.strip()
 
     def _build_weather_text(

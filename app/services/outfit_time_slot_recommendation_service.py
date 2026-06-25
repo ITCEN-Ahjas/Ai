@@ -135,6 +135,7 @@ class TimeSlotOutfitRecommendationService:
             time_slot_weather.timeSlot: self.rule_engine.select(
                 region=request.region,
                 time_slot_weather=time_slot_weather,
+                residence_weather=request.residenceWeather,
             )
             for time_slot_weather in request.timeSlots
         }

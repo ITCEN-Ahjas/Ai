@@ -18,6 +18,24 @@ TIME_SLOT_ORDER = {
 }
 
 
+class ResidenceWeatherRequest(BaseModel):
+    city: str = Field(min_length=1, max_length=80)
+    country: str = Field(min_length=1, max_length=80)
+    feelsLikeTemperature: float = Field(
+        description="현재 거주 도시의 현재 체감온도",
+    )
+
+    @field_validator("city", "country")
+    @classmethod
+    def normalize_text(cls, value: str) -> str:
+        normalized_value = value.strip()
+
+        if not normalized_value:
+            raise ValueError("현재 거주 도시 정보는 비워둘 수 없습니다.")
+
+        return normalized_value
+
+
 class TimeSlotWeatherRequest(BaseModel):
     timeSlot: TimeSlot
     timeSlotName: str = Field(min_length=1, max_length=20)
@@ -40,6 +58,10 @@ class TimeSlotOutfitRecommendationRequest(BaseModel):
         min_length=1,
         max_length=20,
         description="선택한 충북 지역",
+    )
+    residenceWeather: ResidenceWeatherRequest | None = Field(
+        default=None,
+        description="현재 거주 도시의 현재 체감온도 정보",
     )
     timeSlots: list[TimeSlotWeatherRequest] = Field(
         min_length=1,
