@@ -123,14 +123,14 @@ class RouteRuleEngine:
             if item_end_time > end_time:
                 break
 
+            order = len(itinerary) + 1
             itinerary.append(
-                RoutePlace(
-                    placeId=place.placeId,
-                    name=place.name,
-                    category=place.category,
-                    startTime=current_time,
-                    endTime=item_end_time,
-                    indoor=place.indoor,
+                self._build_route_place(
+                    place=place,
+                    start_time=current_time,
+                    end_time=item_end_time,
+                    day=1,
+                    order=order,
                     recommendationReason=self._build_recommendation_reason(
                         request=request,
                         place=place,
@@ -154,13 +154,12 @@ class RouteRuleEngine:
         )
 
         return [
-            RoutePlace(
-                placeId=fallback_place.placeId,
-                name=fallback_place.name,
-                category=fallback_place.category,
-                startTime=current_time,
-                endTime=fallback_end_time,
-                indoor=fallback_place.indoor,
+            self._build_route_place(
+                place=fallback_place,
+                start_time=current_time,
+                end_time=fallback_end_time,
+                day=1,
+                order=1,
                 recommendationReason=self._build_recommendation_reason(
                     request=request,
                     place=fallback_place,
@@ -169,6 +168,36 @@ class RouteRuleEngine:
                 moveTip=self._build_move_tip(request),
             )
         ]
+
+    def _build_route_place(
+        self,
+        *,
+        place: CandidatePlace,
+        start_time: time,
+        end_time: time,
+        day: int,
+        order: int,
+        recommendationReason: str,
+        weatherReason: str,
+        moveTip: str | None,
+    ) -> RoutePlace:
+        return RoutePlace(
+            day=day,
+            order=order,
+            placeId=place.placeId,
+            name=place.name,
+            category=place.category,
+            startTime=start_time,
+            endTime=end_time,
+            indoor=place.indoor,
+            address=place.address,
+            imageUrl=place.imageUrl,
+            latitude=place.latitude,
+            longitude=place.longitude,
+            recommendationReason=recommendationReason,
+            weatherReason=weatherReason,
+            moveTip=moveTip,
+        )
 
     def _pop_best_time_slot_place(
         self,
