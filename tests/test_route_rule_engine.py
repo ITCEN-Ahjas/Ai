@@ -243,3 +243,33 @@ def test_itinerary_assigns_sequential_order_values() -> None:
 
     assert [item.order for item in response.itinerary] == [1, 2, 3, 4, 5]
     assert all(item.day == 1 for item in response.itinerary)
+
+
+def test_route_overview_is_created_for_planner_summary() -> None:
+    response = RouteRuleEngine().recommend(create_request())
+
+    assert response.routeOverview.title == (
+        "Cheongju weather-aware travel route"
+    )
+    assert response.routeOverview.region == "Cheongju"
+    assert response.routeOverview.totalPlaces == len(response.itinerary)
+    assert response.routeOverview.totalStayMinutes == 360
+    assert response.routeOverview.startLocation == "Cheongju Station"
+    assert response.routeOverview.endLocation == "Cheongju Station"
+    assert "balanced" in response.routeOverview.styleTags
+    assert "public_transport" in response.routeOverview.styleTags
+    assert response.routeOverview.weatherSummary
+
+
+def test_route_overview_summarizes_weather_risk() -> None:
+    response = RouteRuleEngine().recommend(
+        create_request(
+            weather_timeline=[
+                create_weather("09:00", "rain", 80, 21),
+                create_weather("12:00", "clear", 10, 24),
+                create_weather("15:00", "clear", 10, 23),
+            ]
+        )
+    )
+
+    assert "indoor stops" in response.routeOverview.weatherSummary

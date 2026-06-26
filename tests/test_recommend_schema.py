@@ -4,6 +4,7 @@ from pydantic import ValidationError
 from app.schemas.recommend import (
     CandidatePlace,
     HourlyWeather,
+    RouteOverview,
     RouteRecommendationRequest,
     RoutePlace,
     TravelConstraint,
@@ -158,4 +159,35 @@ def test_route_place_rejects_invalid_map_coordinates() -> None:
             longitude=127.492,
             recommendationReason="Matches the user's nature preference.",
             weatherReason="Placed during a comfortable outdoor weather slot.",
+        )
+
+
+def test_route_overview_accepts_planner_summary_fields() -> None:
+    overview = RouteOverview(
+        title="Cheongju weather-aware travel route",
+        region="Cheongju",
+        totalPlaces=3,
+        totalStayMinutes=270,
+        startLocation="Cheongju Station",
+        endLocation="Cheongju Terminal",
+        styleTags=["balanced", "public_transport", "nature"],
+        weatherSummary="Hourly weather is comfortable for outdoor stops.",
+    )
+
+    assert overview.title == "Cheongju weather-aware travel route"
+    assert overview.totalPlaces == 3
+    assert overview.totalStayMinutes == 270
+    assert overview.styleTags == ["balanced", "public_transport", "nature"]
+
+
+def test_route_overview_rejects_blank_style_tag() -> None:
+    with pytest.raises(ValidationError):
+        RouteOverview(
+            title="Cheongju weather-aware travel route",
+            region="Cheongju",
+            totalPlaces=3,
+            totalStayMinutes=270,
+            startLocation="Cheongju Station",
+            styleTags=["balanced", " "],
+            weatherSummary="Hourly weather is comfortable for outdoor stops.",
         )
