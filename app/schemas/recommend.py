@@ -104,13 +104,14 @@ class CandidatePlace(BaseModel):
     interests: list[Interest] = Field(min_length=1, max_length=5)
     indoor: bool
     address: str | None = Field(default=None, max_length=120)
+    imageUrl: str | None = Field(default=None, max_length=300)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     averageStayMinutes: int = Field(default=90, ge=30, le=240)
     openTime: time | None = None
     closeTime: time | None = None
 
-    @field_validator("placeId", "name", "address")
+    @field_validator("placeId", "name", "address", "imageUrl")
     @classmethod
     def normalize_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -165,15 +166,34 @@ class RouteRecommendationRequest(BaseModel):
 
 
 class RoutePlace(BaseModel):
+    day: int = Field(default=1, ge=1, le=30)
+    order: int = Field(default=1, ge=1, le=100)
     placeId: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=80)
     category: PlaceCategory
     startTime: time
     endTime: time
     indoor: bool
+    address: str | None = Field(default=None, max_length=120)
+    imageUrl: str | None = Field(default=None, max_length=300)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     recommendationReason: str = Field(min_length=1, max_length=160)
     weatherReason: str = Field(min_length=1, max_length=160)
     moveTip: str | None = Field(default=None, max_length=160)
+
+    @field_validator("placeId", "name", "address", "imageUrl")
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+
+        normalized_value = value.strip()
+
+        if not normalized_value:
+            raise ValueError("text value must not be blank")
+
+        return normalized_value
 
     @model_validator(mode="after")
     def validate_time_range(self):
@@ -196,10 +216,51 @@ class WeatherNote(BaseModel):
     cautionLevel: Literal["low", "medium", "high"] = "low"
 
 
+class RouteOverview(BaseModel):
+    title: str = Field(min_length=1, max_length=80)
+    region: str = Field(min_length=1, max_length=20)
+    totalPlaces: int = Field(ge=1, le=30)
+    totalStayMinutes: int = Field(ge=1, le=1440)
+    startLocation: str = Field(min_length=1, max_length=80)
+    endLocation: str | None = Field(default=None, min_length=1, max_length=80)
+    styleTags: list[str] = Field(min_length=1, max_length=6)
+    weatherSummary: str = Field(min_length=1, max_length=180)
+
+    @field_validator("title", "region", "startLocation", "endLocation")
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+
+        normalized_value = value.strip()
+
+        if not normalized_value:
+            raise ValueError("text value must not be blank")
+
+        return normalized_value
+
+    @field_validator("styleTags")
+    @classmethod
+    def normalize_style_tags(cls, values: list[str]) -> list[str]:
+        normalized_values: list[str] = []
+
+        for value in values:
+            normalized_value = value.strip()
+
+            if not normalized_value:
+                raise ValueError("style tag must not be blank")
+
+            if normalized_value not in normalized_values:
+                normalized_values.append(normalized_value)
+
+        return normalized_values
+
+
 class RouteRecommendationResponse(BaseModel):
     region: str
     source: RouteSource = "fallback"
     summary: str = Field(min_length=1, max_length=220)
+    routeOverview: RouteOverview
     itinerary: list[RoutePlace] = Field(min_length=1, max_length=8)
     planB: list[PlanBOption] = Field(default_factory=list, max_length=3)
     weatherNotes: list[WeatherNote] = Field(default_factory=list, max_length=5)

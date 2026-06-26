@@ -94,3 +94,44 @@ def test_recommend_route_endpoint_rejects_invalid_payload() -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_recommend_options_endpoint_returns_schema_options() -> None:
+    response = client.get("/api/v1/recommend/options")
+
+    assert response.status_code == 200
+
+    body = response.json()
+
+    assert "Cheongju" in body["regions"]
+    assert body["interests"] == [
+        "nature",
+        "food",
+        "exhibition",
+        "activity",
+        "shopping",
+        "festival",
+        "cafe",
+    ]
+    assert body["companionTypes"] == [
+        "solo",
+        "couple",
+        "family",
+        "friends",
+    ]
+    assert body["budgetLevels"] == ["low", "medium", "high"]
+    assert body["activityPaces"] == ["relaxed", "balanced", "tight"]
+    assert body["transportModes"] == [
+        "walk",
+        "public_transport",
+        "car",
+        "taxi",
+    ]
+    assert "restaurant" in body["placeCategories"]
+    assert "rain" in body["weatherConditions"]
+    assert body["fineDustLevels"] == [
+        "good",
+        "normal",
+        "bad",
+        "very_bad",
+    ]

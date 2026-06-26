@@ -6,6 +6,7 @@ from app.schemas.recommend import (
     CandidatePlace,
     HourlyWeather,
     PlanBOption,
+    RouteOverview,
     RoutePlace,
     RouteRecommendationRequest,
     RouteRecommendationResponse,
@@ -40,6 +41,10 @@ class RouteRuleEngine:
             region=request.region,
             source="fallback",
             summary=self._build_summary(
+                request=request,
+                itinerary=itinerary,
+            ),
+            routeOverview=self._build_route_overview(
                 request=request,
                 itinerary=itinerary,
             ),
@@ -123,14 +128,14 @@ class RouteRuleEngine:
             if item_end_time > end_time:
                 break
 
+            order = len(itinerary) + 1
             itinerary.append(
-                RoutePlace(
-                    placeId=place.placeId,
-                    name=place.name,
-                    category=place.category,
-                    startTime=current_time,
-                    endTime=item_end_time,
-                    indoor=place.indoor,
+                self._build_route_place(
+                    place=place,
+                    start_time=current_time,
+                    end_time=item_end_time,
+                    day=1,
+                    order=order,
                     recommendationReason=self._build_recommendation_reason(
                         request=request,
                         place=place,
@@ -154,13 +159,12 @@ class RouteRuleEngine:
         )
 
         return [
-            RoutePlace(
-                placeId=fallback_place.placeId,
-                name=fallback_place.name,
-                category=fallback_place.category,
-                startTime=current_time,
-                endTime=fallback_end_time,
-                indoor=fallback_place.indoor,
+            self._build_route_place(
+                place=fallback_place,
+                start_time=current_time,
+                end_time=fallback_end_time,
+                day=1,
+                order=1,
                 recommendationReason=self._build_recommendation_reason(
                     request=request,
                     place=fallback_place,
@@ -169,6 +173,36 @@ class RouteRuleEngine:
                 moveTip=self._build_move_tip(request),
             )
         ]
+
+    def _build_route_place(
+        self,
+        *,
+        place: CandidatePlace,
+        start_time: time,
+        end_time: time,
+        day: int,
+        order: int,
+        recommendationReason: str,
+        weatherReason: str,
+        moveTip: str | None,
+    ) -> RoutePlace:
+        return RoutePlace(
+            day=day,
+            order=order,
+            placeId=place.placeId,
+            name=place.name,
+            category=place.category,
+            startTime=start_time,
+            endTime=end_time,
+            indoor=place.indoor,
+            address=place.address,
+            imageUrl=place.imageUrl,
+            latitude=place.latitude,
+            longitude=place.longitude,
+            recommendationReason=recommendationReason,
+            weatherReason=weatherReason,
+            moveTip=moveTip,
+        )
 
     def _pop_best_time_slot_place(
         self,
@@ -347,6 +381,63 @@ class RouteRuleEngine:
             "based on preferences and hourly weather."
         )
 
+    def _build_route_overview(
+        self,
+        request: RouteRecommendationRequest,
+        itinerary: list[RoutePlace],
+    ) -> RouteOverview:
+        total_stay_minutes = sum(
+            self._time_difference_minutes(item.startTime, item.endTime)
+            for item in itinerary
+        )
+
+        return RouteOverview(
+            title=f"{request.region} weather-aware travel route",
+            region=request.region,
+            totalPlaces=len(itinerary),
+            totalStayMinutes=total_stay_minutes,
+            startLocation=request.constraint.startLocation,
+            endLocation=request.constraint.endLocation,
+            styleTags=self._build_style_tags(request),
+            weatherSummary=self._build_weather_summary(
+                request.weatherTimeline
+            ),
+        )
+
+    def _build_style_tags(
+        self,
+        request: RouteRecommendationRequest,
+    ) -> list[str]:
+        tags = [
+            request.preference.activityPace,
+            request.preference.transportMode,
+            request.preference.companionType,
+        ]
+
+        for interest in request.preference.interests:
+            if interest not in tags:
+                tags.append(interest)
+
+        return tags[:6]
+
+    def _build_weather_summary(
+        self,
+        weather_timeline: list[HourlyWeather],
+    ) -> str:
+        if any(self._is_uncertain_rain(weather) for weather in weather_timeline):
+            return (
+                "Rain probability is uncertain in some time slots, so the route keeps indoor alternatives ready."
+            )
+
+        if any(self._should_prefer_indoor(weather) for weather in weather_timeline):
+            return (
+                "Some time slots may be uncomfortable, so indoor stops are placed where weather risk is higher."
+            )
+
+        return (
+            "Hourly weather is generally comfortable, so outdoor stops can be placed earlier in the route."
+        )
+
     def _find_weather_for_time(
         self,
         weather_timeline: list[HourlyWeather],
@@ -420,6 +511,12 @@ class RouteRuleEngine:
         base = datetime.combine(datetime.today(), value)
 
         return (base + timedelta(minutes=minutes)).time().replace(second=0)
+
+    def _time_difference_minutes(self, start_time: time, end_time: time) -> int:
+        start = datetime.combine(datetime.today(), start_time)
+        end = datetime.combine(datetime.today(), end_time)
+
+        return int((end - start).total_seconds() // 60)
 
     def _to_minutes(self, value: time) -> int:
         return value.hour * 60 + value.minute
