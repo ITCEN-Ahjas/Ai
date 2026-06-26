@@ -104,13 +104,14 @@ class CandidatePlace(BaseModel):
     interests: list[Interest] = Field(min_length=1, max_length=5)
     indoor: bool
     address: str | None = Field(default=None, max_length=120)
+    imageUrl: str | None = Field(default=None, max_length=300)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     averageStayMinutes: int = Field(default=90, ge=30, le=240)
     openTime: time | None = None
     closeTime: time | None = None
 
-    @field_validator("placeId", "name", "address")
+    @field_validator("placeId", "name", "address", "imageUrl")
     @classmethod
     def normalize_text(cls, value: str | None) -> str | None:
         if value is None:
@@ -165,15 +166,34 @@ class RouteRecommendationRequest(BaseModel):
 
 
 class RoutePlace(BaseModel):
+    day: int = Field(default=1, ge=1, le=30)
+    order: int = Field(default=1, ge=1, le=100)
     placeId: str = Field(min_length=1, max_length=80)
     name: str = Field(min_length=1, max_length=80)
     category: PlaceCategory
     startTime: time
     endTime: time
     indoor: bool
+    address: str | None = Field(default=None, max_length=120)
+    imageUrl: str | None = Field(default=None, max_length=300)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
     recommendationReason: str = Field(min_length=1, max_length=160)
     weatherReason: str = Field(min_length=1, max_length=160)
     moveTip: str | None = Field(default=None, max_length=160)
+
+    @field_validator("placeId", "name", "address", "imageUrl")
+    @classmethod
+    def normalize_text(cls, value: str | None) -> str | None:
+        if value is None:
+            return value
+
+        normalized_value = value.strip()
+
+        if not normalized_value:
+            raise ValueError("text value must not be blank")
+
+        return normalized_value
 
     @model_validator(mode="after")
     def validate_time_range(self):
