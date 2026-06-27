@@ -24,10 +24,13 @@ Rules:
 2. Keep every itinerary placeId, name, category, startTime, endTime, and indoor value unchanged.
 3. Keep the same number and order of itinerary items.
 4. Keep planB replaceFrom and replaceTo values based on the fallback data.
-5. Do not mention brands, prices, reservations, opening hours, or facts not present in the input.
-6. Explain weather as a scheduling reason, not as a simple place removal filter.
-7. Write concise English that a foreign traveler can understand.
-8. Set source to "ai".
+5. Do not generate or modify itinerary latitude, longitude, imageUrl, or address values.
+6. Treat candidatePlaces and the backend fallback route as the source of truth for place metadata.
+7. Focus on summary, recommendationReason, weatherReason, moveTip, weather notes, and Plan B text.
+8. Do not mention brands, prices, reservations, opening hours, or facts not present in the input.
+9. Explain weather as a scheduling reason, not as a simple place removal filter.
+10. Write concise English that a foreign traveler can understand.
+11. Set source to "ai".
 
 [User request]
 {request.model_dump_json(indent=2)}

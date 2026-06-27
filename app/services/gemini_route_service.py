@@ -153,6 +153,10 @@ class GeminiRouteService:
                 "startTime",
                 "endTime",
                 "indoor",
+                "address",
+                "imageUrl",
+                "latitude",
+                "longitude",
             ]
 
             for field_name in preserved_fields:

@@ -104,7 +104,7 @@ class CandidatePlace(BaseModel):
     interests: list[Interest] = Field(min_length=1, max_length=5)
     indoor: bool
     address: str | None = Field(default=None, max_length=120)
-    imageUrl: str | None = Field(default=None, max_length=300)
+    imageUrl: str | None = Field(default=None, max_length=1000)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     averageStayMinutes: int = Field(default=90, ge=30, le=240)
@@ -175,7 +175,7 @@ class RoutePlace(BaseModel):
     endTime: time
     indoor: bool
     address: str | None = Field(default=None, max_length=120)
-    imageUrl: str | None = Field(default=None, max_length=300)
+    imageUrl: str | None = Field(default=None, max_length=1000)
     latitude: float | None = Field(default=None, ge=-90, le=90)
     longitude: float | None = Field(default=None, ge=-180, le=180)
     recommendationReason: str = Field(min_length=1, max_length=160)
