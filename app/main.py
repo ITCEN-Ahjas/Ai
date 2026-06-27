@@ -11,7 +11,7 @@ app = FastAPI(
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "https://여기에_Amplify주소.amplifyapp.com",
+    allow_origins=["http://localhost:5173", "https://develop.dh6dvpo8hhgsx.amplifyapp.com",
     ],
     allow_credentials=True,
     allow_methods=["*"],
